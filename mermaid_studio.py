@@ -92,20 +92,21 @@ class MermaidStudio(tk.Tk):
 
         # Toolbar
         toolbar = ttk.Frame(self, padding=(6, 4))
-        toolbar.grid(row=0, column=0, sticky="ew")
-        toolbar.columnconfigure(0, weight=1)
+        toolbar.grid(row=0, column=0, sticky="ew")   # grid is fine here (toolbar in root)
 
+        # Left-aligned controls
         self.render_btn = ttk.Button(toolbar, text="Render", command=self._render_clicked)
-        self.render_btn.grid(row=0, column=0, sticky="w")
+        self.render_btn.pack(side="left", padx=(0, 8))
 
-        self.auto_cb = ttk.Checkbutton(toolbar, text="Auto render", variable=self.auto_render_var,
-                                       command=self._on_autorender_toggle)
-        self.auto_cb.grid(row=0, column=1, padx=12, sticky="w")
+        self.auto_cb = ttk.Checkbutton(
+            toolbar, text="Auto render", variable=self.auto_render_var,
+            command=self._on_autorender_toggle
+        )
+        self.auto_cb.pack(side="left")
 
-        # Status
+        # Right-aligned status
         self.status = ttk.Label(toolbar, text="Ready", anchor="e")
-        self.status.grid(row=0, column=2, sticky="e")
-        toolbar.columnconfigure(2, weight=1)
+        self.status.pack(side="right")
 
         # Paned window: editor | preview
         paned = ttk.Panedwindow(self, orient=tk.HORIZONTAL)
