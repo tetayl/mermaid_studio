@@ -41,6 +41,13 @@ class MermaidStudio(tk.Tk):
         self.mmdc_path: str | None = self._find_mmdc()
         self.render_lock = threading.Lock()
 
+        # Auto render state
+        self.auto_render_var = tk.BooleanVar(value=False)
+        self.auto_render_job = None          # handle from after()
+        self.pending_autorender = False      # true if edits happened during an active render
+        self.last_rendered_hash = None       # hash of last rendered code
+        self._code_hash_being_rendered = None
+
         self._build_ui()
         self._new_document(initial_text=DEFAULT_SAMPLE)
         self.iconphoto(False, tk.PhotoImage(file="assets/appicon.png"))
@@ -91,9 +98,14 @@ class MermaidStudio(tk.Tk):
         self.render_btn = ttk.Button(toolbar, text="Render", command=self._render_clicked)
         self.render_btn.grid(row=0, column=0, sticky="w")
 
+        self.auto_cb = ttk.Checkbutton(toolbar, text="Auto render", variable=self.auto_render_var,
+                                       command=self._on_autorender_toggle)
+        self.auto_cb.grid(row=0, column=1, padx=12, sticky="w")
+
         # Status
         self.status = ttk.Label(toolbar, text="Ready", anchor="e")
-        self.status.grid(row=0, column=1, sticky="e")
+        self.status.grid(row=0, column=2, sticky="e")
+        toolbar.columnconfigure(2, weight=1)
 
         # Paned window: editor | preview
         paned = ttk.Panedwindow(self, orient=tk.HORIZONTAL)
@@ -108,7 +120,8 @@ class MermaidStudio(tk.Tk):
         self.editor.grid(row=0, column=0, sticky="nsew")
 
         # Optional: react to changes (e.g., show Edited in status bar)
-        self.editor.on_change(lambda: self._set_status("Edited"))
+        self.editor.on_change(self._on_editor_changed)
+
 
         paned.add(editor_frame, weight=1)
 
@@ -142,6 +155,58 @@ class MermaidStudio(tk.Tk):
         self.bind_all("<Control-n>", lambda e: self._new_document())
         self.bind_all("<Control-o>", lambda e: self._open_file())
         self.bind_all("<Control-s>", lambda e: self._save_file())
+
+    def _on_editor_changed(self):
+        self._set_status("Edited")
+        if self.auto_render_var.get():
+            self._schedule_autorender()
+
+    def _on_autorender_toggle(self):
+        if self.auto_render_var.get():
+            self._schedule_autorender()
+        else:
+            self._cancel_autorender()
+            self._set_status("Auto render off")
+
+    def _schedule_autorender(self, delay_ms: int = 5000):
+        # reset any existing timer
+        if self.auto_render_job is not None:
+            try:
+                self.after_cancel(self.auto_render_job)
+            except Exception:
+                pass
+            self.auto_render_job = None
+        # schedule a new one
+        self.auto_render_job = self.after(delay_ms, self._auto_render_fire)
+        self._set_status(f"Auto render in {delay_ms // 1000} s")
+
+    def _cancel_autorender(self):
+        if self.auto_render_job is not None:
+            try:
+                self.after_cancel(self.auto_render_job)
+            except Exception:
+                pass
+            self.auto_render_job = None
+
+    def _auto_render_fire(self):
+        self.auto_render_job = None
+        code = self.editor.get()
+        code = code if code is not None else ""
+        code_hash = hash(code)
+        if not code.strip():
+            self._set_status("Nothing to render")
+            return
+        if self.last_rendered_hash is not None and code_hash == self.last_rendered_hash:
+            self._set_status("No changes since last render")
+            return
+        if self.render_lock.locked():
+            # a render is in progress, queue another once it finishes
+            self.pending_autorender = True
+            self._set_status("Render in progress - will auto render next")
+            return
+        # trigger a render now
+        self._render_clicked()
+
 
     def _about(self):
         messagebox.showinfo(APP_TITLE, "Simple Python UI wrapper for mermaid-cli (mmdc).\\n"
@@ -229,11 +294,17 @@ class MermaidStudio(tk.Tk):
 
     # - Render
     def _render_clicked(self):
+        # stop any pending auto render to avoid double work
+        self._cancel_autorender()
+
         if not self.mmdc_path:
             if not self._prompt_set_mmdc_path():
                 return
 
         code = self.editor.get()
+        if code is None:
+            code = ""
+        self._code_hash_being_rendered = hash(code)
 
         # Write under $HOME/mermaid_studio_cache so the Snap can read it
         cache_dir = Path.home() / "mermaid_studio_cache"
@@ -343,9 +414,24 @@ class MermaidStudio(tk.Tk):
                 except Exception:
                     pass
                 self.last_png = output_png
+                self.last_rendered_hash = self._code_hash_being_rendered
                 self._set_status(f"Rendered to {output_png.name}")
-                #self._show_preview(output_png)
-                self.preview.display(output_png)
+                # Update preview
+                try:
+                    # If using PreviewPane
+                    if hasattr(self, "preview"):
+                        self.preview.display(output_png)
+                    else:
+                        self._show_preview(output_png)
+                except Exception:
+                    # Fall back to old method if needed
+                    self._show_preview(output_png)
+
+                # If edits happened during render and auto render is still on, schedule a quick follow-up
+                if self.pending_autorender and self.auto_render_var.get():
+                    self.pending_autorender = False
+                    self._schedule_autorender(delay_ms=1000)
+
 
 
         threading.Thread(target=worker, daemon=True).start()
