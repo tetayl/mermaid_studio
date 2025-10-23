@@ -17,7 +17,7 @@ from example_data import list_examples, get_example
 
 
 
-APP_VERSION = "0.1.0"
+APP_VERSION = "0.2.1"
 
 APP_TITLE = "Mermaid Studio - Python UI"
 DEFAULT_SAMPLE = """flowchart LR
@@ -51,7 +51,7 @@ class MermaidStudio(tk.Tk):
         self._build_ui()
         self._new_document(initial_text=DEFAULT_SAMPLE)
         self.iconphoto(False, tk.PhotoImage(file="assets/appicon.png"))
-        messagebox.showinfo(APP_TITLE, f"Mermaid Studio v{APP_VERSION}\n\nSimple Python UI wrapper for mermaid-cli.")
+        messagebox.showinfo(APP_TITLE, f"Mermaid Studio v{APP_VERSION}\n \nSimple Python UI wrapper for mermaid-cli.")
 
 
     # - UI building
@@ -209,14 +209,14 @@ class MermaidStudio(tk.Tk):
 
 
     def _about(self):
-        messagebox.showinfo(APP_TITLE, "Simple Python UI wrapper for mermaid-cli (mmdc).\\n"
+        messagebox.showinfo(APP_TITLE, "Simple Python UI wrapper for mermaid-cli (mmdc).\n \n"
                                        "Edit Mermaid code, then Render to preview and export PNG.")
 
     # - File operations
     def _new_document(self, initial_text: str = ""):
         self.current_file = None
         self._set_title()
-        self.editor.set_text((initial_text.strip() + "\n") if initial_text else "")
+        self.editor.set_text((initial_text.strip() + "\n \n") if initial_text else "")
         self.status.configure(text="New document")
         self.editor.focus_editor()
 
@@ -236,7 +236,7 @@ class MermaidStudio(tk.Tk):
             self.status.configure(text=f"Opened {Path(path).name}")
             self.editor.focus_editor()
         except Exception as e:
-            messagebox.showerror("Error", f"Could not open file:\\n{e}")
+            messagebox.showerror("Error", f"Could not open file:\n{e}")
 
     def _save_file(self, force_dialog: bool = False):
         if self.current_file is None or force_dialog:
@@ -247,7 +247,7 @@ class MermaidStudio(tk.Tk):
             self.status.configure(text=f"Saved {self.current_file.name}")
             return self.current_file
         except Exception as e:
-            messagebox.showerror("Error", f"Could not save file:\\n{e}")
+            messagebox.showerror("Error", f"Could not save file:\n{e}")
 
     def _save_file_as(self):
         path = filedialog.asksaveasfilename(
@@ -277,7 +277,7 @@ class MermaidStudio(tk.Tk):
             shutil.copy(self.last_png, dest)
             self.status.configure(text=f"Exported PNG to {Path(dest).name}")
         except Exception as e:
-            messagebox.showerror("Error", f"Could not export PNG:\\n{e}")
+            messagebox.showerror("Error", f"Could not export PNG:\n{e}")
 
     def _apply_example(self, name: str):
         """Load an example diagram into the editor."""
@@ -391,7 +391,7 @@ class MermaidStudio(tk.Tk):
                     self._set_status("Render timed out")
                     messagebox.showerror(
                         "Render failed",
-                        f"mmdc timed out after {te.timeout}s.\n\nCommand:\n{' '.join(cmd)}"
+                        f"mmdc timed out after {te.timeout}s. \n \nCommand:\n{' '.join(cmd)}"
                     )
                     return
                 except FileNotFoundError:
@@ -402,7 +402,7 @@ class MermaidStudio(tk.Tk):
                     self._set_status("Render failed")
                     messagebox.showerror(
                         "Render failed",
-                        f"{e}\n\nCommand:\n{' '.join(cmd)}\n\nInput:\n{input_file}\nOutput:\n{output_png}"
+                        f"{e}\n \nCommand:\n{' '.join(cmd)}\n \nInput:\n{input_file}\nOutput:\n{output_png}"
                     )
                     return
 
@@ -452,7 +452,7 @@ class MermaidStudio(tk.Tk):
         try:
             img = Image.open(png_path)
         except Exception as e:
-            messagebox.showerror("Preview error", f"Could not open PNG:\\n{e}")
+            messagebox.showerror("Preview error", f"Could not open PNG:\n{e}")
             return
         
         # Remove placeholder text once something is rendered
