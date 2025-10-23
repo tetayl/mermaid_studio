@@ -11,6 +11,10 @@ import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 from PIL import Image, ImageTk
 from datetime import datetime
+from code_editor import MermaidEditor
+from preview_pane import PreviewPane
+from example_data import list_examples, get_example
+
 
 
 APP_VERSION = "0.1.0"
@@ -62,6 +66,16 @@ class MermaidStudio(tk.Tk):
         file_menu.add_command(label="Exit", command=self.quit)
         menubar.add_cascade(label="File", menu=file_menu)
 
+        # Examples menu (between File and Settings)
+        examples_menu = tk.Menu(menubar, tearoff=0)
+        for name in sorted(list_examples()):
+            examples_menu.add_command(
+                label=name,
+                command=lambda n=name: self._apply_example(n)
+            )
+        menubar.add_cascade(label="Examples", menu=examples_menu)
+
+
         settings_menu = tk.Menu(menubar, tearoff=0)
         settings_menu.add_command(label="Set mmdc path...", command=self._set_mmdc_path)
         settings_menu.add_command(label="About", command=self._about)
@@ -85,18 +99,16 @@ class MermaidStudio(tk.Tk):
         paned = ttk.Panedwindow(self, orient=tk.HORIZONTAL)
         paned.grid(row=1, column=0, sticky="nsew")
 
-        # Editor
+        # Editor (Mermaid-aware)
         editor_frame = ttk.Frame(paned)
         editor_frame.rowconfigure(0, weight=1)
         editor_frame.columnconfigure(0, weight=1)
 
-        self.text = tk.Text(editor_frame, wrap="none", undo=True)
-        self.text.grid(row=0, column=0, sticky="nsew")
-        xscroll = ttk.Scrollbar(editor_frame, orient="horizontal", command=self.text.xview)
-        xscroll.grid(row=1, column=0, sticky="ew")
-        yscroll = ttk.Scrollbar(editor_frame, orient="vertical", command=self.text.yview)
-        yscroll.grid(row=0, column=1, sticky="ns")
-        self.text.configure(xscrollcommand=xscroll.set, yscrollcommand=yscroll.set, font=("Courier New", 12))
+        self.editor = MermaidEditor(editor_frame)
+        self.editor.grid(row=0, column=0, sticky="nsew")
+
+        # Optional: react to changes (e.g., show Edited in status bar)
+        self.editor.on_change(lambda: self._set_status("Edited"))
 
         paned.add(editor_frame, weight=1)
 
@@ -105,20 +117,26 @@ class MermaidStudio(tk.Tk):
         preview_frame.rowconfigure(0, weight=1)
         preview_frame.columnconfigure(0, weight=1)
 
-        self.canvas = tk.Canvas(preview_frame, background="#f5f5f5")
-        self.canvas.grid(row=0, column=0, sticky="nsew")
+        # old
+        #self.canvas = tk.Canvas(preview_frame, background="#f5f5f5")
+        #self.canvas.grid(row=0, column=0, sticky="nsew")
+        from preview_pane import PreviewPane
+        self.preview = PreviewPane(preview_frame, bg="#f5f5f5")
+        self.preview.grid(row=0, column=0, sticky="nsew")
+        #self.preview.set_placeholder("No preview rendered yet")
+
         paned.add(preview_frame, weight=1)
         # Set divider to 50% once the window has been drawn
-        self.after(100, lambda: paned.sashpos(0, self.winfo_width() // 2))
+        self.after(100, lambda: paned.sashpos(0, self.winfo_width() // 3))
 
         # Add placeholder text in the center of the preview pane
-        self.placeholder_text = self.canvas.create_text(
-            "150", "50",
-            text="No preview rendered yet",
-            fill="#888",
-            font=("Segoe UI", 14, "italic"),
-            anchor="center"
-        )
+        #self.placeholder_text = self.canvas.create_text(
+        #    "150", "50",
+        #    text="No preview rendered yet",
+        #    fill="#888",
+        #    font=("Segoe UI", 14, "italic"),
+        #    anchor="center"
+        #)
 
         # Key bindings
         self.bind_all("<Control-n>", lambda e: self._new_document())
@@ -133,10 +151,9 @@ class MermaidStudio(tk.Tk):
     def _new_document(self, initial_text: str = ""):
         self.current_file = None
         self._set_title()
-        self.text.delete("1.0", tk.END)
-        self.text.insert("1.0", initial_text.strip() )
+        self.editor.set_text((initial_text.strip() + "\n") if initial_text else "")
         self.status.configure(text="New document")
-        self._show_placeholder()
+        self.editor.focus_editor()
 
     def _open_file(self):
         path = filedialog.askopenfilename(
@@ -148,11 +165,11 @@ class MermaidStudio(tk.Tk):
         try:
             with open(path, "r", encoding="utf-8") as f:
                 content = f.read()
-            self.text.delete("1.0", tk.END)
-            self.text.insert("1.0", content)
+            self.editor.set_text(content)
             self.current_file = Path(path)
             self._set_title()
             self.status.configure(text=f"Opened {Path(path).name}")
+            self.editor.focus_editor()
         except Exception as e:
             messagebox.showerror("Error", f"Could not open file:\\n{e}")
 
@@ -161,7 +178,7 @@ class MermaidStudio(tk.Tk):
             return self._save_file_as()
         try:
             with open(self.current_file, "w", encoding="utf-8") as f:
-                f.write(self.text.get("1.0", tk.END))
+                f.write(self.editor.get())
             self.status.configure(text=f"Saved {self.current_file.name}")
             return self.current_file
         except Exception as e:
@@ -197,13 +214,26 @@ class MermaidStudio(tk.Tk):
         except Exception as e:
             messagebox.showerror("Error", f"Could not export PNG:\\n{e}")
 
+    def _apply_example(self, name: str):
+        """Load an example diagram into the editor."""
+        try:
+            code = get_example(name)
+        except KeyError:
+            messagebox.showerror("Error", f"Example '{name}' not found.")
+            return
+        self.editor.set_text(code)
+        self.current_file = None
+        self._set_title()
+        self._set_status(f"Loaded example: {name}")
+
+
     # - Render
     def _render_clicked(self):
         if not self.mmdc_path:
             if not self._prompt_set_mmdc_path():
                 return
 
-        code = self.text.get("1.0", tk.END)
+        code = self.editor.get()
 
         # Write under $HOME/mermaid_studio_cache so the Snap can read it
         cache_dir = Path.home() / "mermaid_studio_cache"
@@ -314,20 +344,21 @@ class MermaidStudio(tk.Tk):
                     pass
                 self.last_png = output_png
                 self._set_status(f"Rendered to {output_png.name}")
-                self._show_preview(output_png)
+                #self._show_preview(output_png)
+                self.preview.display(output_png)
 
 
         threading.Thread(target=worker, daemon=True).start()
 
-    def _show_placeholder(self):
-        self.canvas.delete("all")
-        self.placeholder_text = self.canvas.create_text(
-            "150", "50",
-            text="No preview rendered yet",
-            fill="#888",
-            font=("Segoe UI", 14, "italic"),
-            anchor="center"
-        )
+#    def _show_placeholder(self):
+#        self.canvas.delete("all")
+#        self.placeholder_text = self.canvas.create_text(
+#            "150", "50",
+#            text="No preview rendered yet",
+#            fill="#888",
+#            font=("Segoe UI", 14, "italic"),
+#            anchor="center"
+#        )
 
 
     # - Helpers
@@ -339,8 +370,8 @@ class MermaidStudio(tk.Tk):
             return
         
         # Remove placeholder text once something is rendered
-        if hasattr(self, "placeholder_text"):
-            self.canvas.delete(self.placeholder_text)
+        #if hasattr(self, "placeholder_text"):
+        #    self.canvas.delete(self.placeholder_text)
 
         # Fit image to canvas while preserving aspect ratio
         canvas_w = self.canvas.winfo_width() or 600

@@ -49,14 +49,16 @@ It provides a simple two-pane interface: a text editor on the left for Mermaid c
 
 5. Create Puppeteer config file
 
-   mkdir -p ~/.config/mermaid_studio  
-   CHROME="$(ls -d ~/.cache/puppeteer/chrome/*/chrome-linux64/chrome | tail -n1)"  
-   cat > ~/.config/mermaid_studio/puppeteer.json <<EOF  
-   {  
-     "executablePath": "$CHROME",  
-     "args": ["--no-sandbox", "--disable-setuid-sandbox"]  
-   }  
+   npx --yes puppeteer@latest browsers install chrome
+   CHROME="$(ls -d ~/.cache/puppeteer/chrome/*/chrome-linux64/chrome | tail -n1)"
+   mkdir -p ~/.config/mermaid_studio
+   cat > ~/.config/mermaid_studio/puppeteer.json <<EOF
+   {
+   "executablePath": "$CHROME",
+   "args": ["--no-sandbox", "--disable-setuid-sandbox"]
+   }
    EOF
+
 
 ---
 
