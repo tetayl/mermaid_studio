@@ -14,6 +14,7 @@ from datetime import datetime
 from code_editor import MermaidEditor
 from preview_pane import PreviewPane
 from example_data import list_examples, get_example
+import re
 
 
 
@@ -59,7 +60,7 @@ class MermaidStudio(tk.Tk):
         self.columnconfigure(0, weight=1)
         self.rowconfigure(1, weight=1)
 
-        # Menu
+        # File Menu
         menubar = tk.Menu(self)
         file_menu = tk.Menu(menubar, tearoff=0)
         file_menu.add_command(label="New", command=self._new_document, accelerator="Ctrl+N")
@@ -73,7 +74,19 @@ class MermaidStudio(tk.Tk):
         file_menu.add_command(label="Exit", command=self.quit)
         menubar.add_cascade(label="File", menu=file_menu)
 
-        # Examples menu (between File and Settings)
+        # Edit Menu
+        edit_menu = tk.Menu(menubar, tearoff=0)
+        edit_menu.add_command( label="Undo", accelerator="Ctrl+Z", command=lambda: self._editor_event("<<Undo>>"))
+        edit_menu.add_command( label="Redo", accelerator="Ctrl+Y", command=lambda: self._editor_event("<<Redo>>"))
+        edit_menu.add_separator()
+        edit_menu.add_command( label="Cut", accelerator="Ctrl+X", command=lambda: self._editor_event("<<Cut>>"))
+        edit_menu.add_command(label="Copy", accelerator="Ctrl+C", command=lambda: self._editor_event("<<Copy>>"))
+        edit_menu.add_command( label="Paste", accelerator="Ctrl+V", command=lambda: self._editor_event("<<Paste>>"))
+        edit_menu.add_separator()
+        edit_menu.add_command( label="Select All", accelerator="Ctrl+A", command=lambda: self._editor_select_all())
+        menubar.add_cascade(label="Edit", menu=edit_menu)
+
+        # Example menu
         examples_menu = tk.Menu(menubar, tearoff=0)
         for name in sorted(list_examples()):
             examples_menu.add_command(
@@ -82,7 +95,7 @@ class MermaidStudio(tk.Tk):
             )
         menubar.add_cascade(label="Examples", menu=examples_menu)
 
-
+        # Settings menu
         settings_menu = tk.Menu(menubar, tearoff=0)
         settings_menu.add_command(label="Set mmdc path...", command=self._set_mmdc_path)
         settings_menu.add_command(label="About", command=self._about)
@@ -114,15 +127,37 @@ class MermaidStudio(tk.Tk):
 
         # Editor (Mermaid-aware)
         editor_frame = ttk.Frame(paned)
-        editor_frame.rowconfigure(0, weight=1)
+        editor_frame.rowconfigure(0, weight=1)   # editor row grows
+        editor_frame.rowconfigure(1, weight=0)   # log row, fixed height
         editor_frame.columnconfigure(0, weight=1)
 
         self.editor = MermaidEditor(editor_frame)
         self.editor.grid(row=0, column=0, sticky="nsew")
 
-        # Optional: react to changes (e.g., show Edited in status bar)
-        self.editor.on_change(self._on_editor_changed)
+        # Error log (hidden by default)
+        self.err_frame = ttk.Frame(editor_frame)
+        self.err_text = tk.Text(
+            self.err_frame,
+            height=6,
+            wrap="word",
+            state="disabled",
+            background="#fff8f8",
+            foreground="#7a0000",
+            font=("Courier New", 11),
+        )
+        self.err_scroll = ttk.Scrollbar(self.err_frame, orient="vertical", command=self.err_text.yview)
+        self.err_text.configure(yscrollcommand=self.err_scroll.set)
+        self.err_text.grid(row=0, column=0, sticky="nsew")
+        self.err_scroll.grid(row=0, column=1, sticky="ns")
+        self.err_frame.rowconfigure(0, weight=1)
+        self.err_frame.columnconfigure(0, weight=1)
 
+        # Start hidden
+        self.err_frame.grid(row=1, column=0, sticky="nsew")
+        self.err_frame.grid_remove()
+
+        # Change callback
+        self.editor.on_change(self._on_editor_changed)
 
         paned.add(editor_frame, weight=1)
 
@@ -131,31 +166,61 @@ class MermaidStudio(tk.Tk):
         preview_frame.rowconfigure(0, weight=1)
         preview_frame.columnconfigure(0, weight=1)
 
-        # old
-        #self.canvas = tk.Canvas(preview_frame, background="#f5f5f5")
-        #self.canvas.grid(row=0, column=0, sticky="nsew")
+
         from preview_pane import PreviewPane
         self.preview = PreviewPane(preview_frame, bg="#f5f5f5")
         self.preview.grid(row=0, column=0, sticky="nsew")
-        #self.preview.set_placeholder("No preview rendered yet")
+
 
         paned.add(preview_frame, weight=1)
         # Set divider to 50% once the window has been drawn
         self.after(100, lambda: paned.sashpos(0, self.winfo_width() // 3))
 
-        # Add placeholder text in the center of the preview pane
-        #self.placeholder_text = self.canvas.create_text(
-        #    "150", "50",
-        #    text="No preview rendered yet",
-        #    fill="#888",
-        #    font=("Segoe UI", 14, "italic"),
-        #    anchor="center"
-        #)
-
         # Key bindings
         self.bind_all("<Control-n>", lambda e: self._new_document())
         self.bind_all("<Control-o>", lambda e: self._open_file())
         self.bind_all("<Control-s>", lambda e: self._save_file())
+
+    def _errorlog_show(self, text: str, status_msg: str | None = None):
+        # Trim puppeteer stack noise if present (Parser3.parseError and below)
+        cutoff = text.find("Parser3.parseError")
+        if cutoff != -1:
+            text = text[:cutoff].rstrip()
+
+        cleaned = text.strip()
+
+        self.err_text.configure(state="normal")
+        self.err_text.delete("1.0", "end")
+        self.err_text.insert("1.0", cleaned + "\n")
+        self.err_text.configure(state="disabled")
+        self.err_frame.grid()  # make sure it's visible
+
+        if status_msg is None:
+            status_msg = "Render failed - see error log"
+        self._set_status(status_msg)
+
+    def _errorlog_hide(self):
+        # Clear and hide
+        self.err_text.configure(state="normal")
+        self.err_text.delete("1.0", "end")
+        self.err_text.configure(state="disabled")
+        self.err_frame.grid_remove()
+
+    def _editor_event(self, sequence: str):
+        # Safely forward to the underlying Text widget inside MermaidEditor
+        try:
+            self.editor.text.event_generate(sequence)
+        except Exception:
+            pass
+
+    def _editor_select_all(self):
+        try:
+            self.editor.text.tag_add("sel", "1.0", "end-1c")
+            self.editor.text.see("insert")
+            self.editor.text.focus_set()
+        except Exception:
+            pass
+
 
     def _on_editor_changed(self):
         self._set_status("Edited")
@@ -264,7 +329,7 @@ class MermaidStudio(tk.Tk):
 
     def _export_png_as(self):
         if self.last_png is None or not self.last_png.exists():
-            messagebox.showwarning("No PNG yet", "Please render first to generate a PNG.")
+            messagebox.showwarning("No preview yet", "Please render first to generate a preview.")
             return
         dest = filedialog.asksaveasfilename(
             title="Export PNG As",
@@ -306,6 +371,9 @@ class MermaidStudio(tk.Tk):
         if code is None:
             code = ""
         self._code_hash_being_rendered = hash(code)
+
+        # Warn early if this diagram type is likely unsupported/experimental
+        self._maybe_warn_diagram_type(code)
 
         # Write under $HOME/mermaid_studio_cache so the Snap can read it
         cache_dir = Path.home() / "mermaid_studio_cache"
@@ -382,10 +450,33 @@ class MermaidStudio(tk.Tk):
                         cwd=str(input_file.parent),
                         timeout=45,
                     )
-                    if result.returncode != 0:
-                        # Surface whatever mmdc printed
-                        msg = result.stderr.strip() or result.stdout.strip() or "mmdc returned a nonzero exit status"
-                        raise RuntimeError(msg)
+
+                    # Check for any Mermaid parse/render errors, even if exit code is 0
+                    soft_error = False
+                    error_markers = [
+                        "Syntax error in text",
+                        "Parse error on line",
+                        "Lexical error on line",
+                        "Expecting '",         # mermaid's "Expecting 'X' got 'Y'" style
+                    ]
+                    combined_output = (result.stderr or "") + "\n" + (result.stdout or "")
+                    for marker in error_markers:
+                        if marker in combined_output:
+                            soft_error = True
+                            break
+
+                    if result.returncode != 0 or soft_error:
+                        items, summary, full_text = self._parse_mermaid_errors(result.stderr, result.stdout)
+                        # Show in status bar
+                        self._set_status(f"Render failed: {summary[:160]}")
+                        # Highlite all errored lines
+                        if items:
+                            try:
+                                self.editor.highlight_errors(items)
+                            except Exception:
+                                pass
+                        self._errorlog_show(full_text)
+                        return
                     if not output_png.exists():
                         raise RuntimeError("mmdc finished but no output PNG was produced")
                 except subprocess.TimeoutExpired as te:
@@ -417,6 +508,8 @@ class MermaidStudio(tk.Tk):
                 self.last_png = output_png
                 self.last_rendered_hash = self._code_hash_being_rendered
                 self._set_status(f"Rendered to {output_png.name}")
+                self.editor.clear_error_highlights()
+                self._errorlog_hide()
                 # Update preview
                 try:
                     # If using PreviewPane
@@ -505,6 +598,154 @@ class MermaidStudio(tk.Tk):
 
     def _set_status(self, text: str):
         self.status.configure(text=text)
+
+    def _parse_mermaid_errors(self, stderr: str, stdout: str = ""):
+        """
+        Returns (items, message, full_text)
+        items: list[(line:int, col:int|None)] for highlighting all lines
+        message: short one-line summary
+        full_text: detailed combined text for the error log
+        We look for multiple '... error on line N ...' patterns and optional 'column C'.
+        """
+        full = ((stderr or "") + "\n" + (stdout or "")).strip()
+        # Collect all line numbers
+        lines = []
+        for m in re.finditer(r"(?:Parse|Lexical)\s+error.*?line\s+(\d+)", full, re.IGNORECASE | re.DOTALL):
+            try:
+                lines.append(int(m.group(1)))
+            except Exception:
+                pass
+        # Fallback: any 'line <num>' mentions
+        if not lines:
+            for m in re.finditer(r"\bline\s+(\d+)\b", full, re.IGNORECASE):
+                try:
+                    lines.append(int(m.group(1)))
+                except Exception:
+                    pass
+        # Column: if present, we use the first one globally
+        col = None
+        mc = re.search(r"\bcolumn\s+(\d+)\b", full, re.IGNORECASE)
+        if mc:
+            try:
+                col = int(mc.group(1))
+            except Exception:
+                pass
+
+        # Deduplicate and sort
+        uniq = sorted(set(lines))
+        items = [(ln, col) for ln in uniq] if uniq else []
+
+        # Short message for status
+        lines_nonempty = [ln.strip() for ln in full.splitlines() if ln.strip()]
+        summary = " | ".join(lines_nonempty[:3]) if lines_nonempty else "Mermaid render error"
+
+        return items, summary, (full or "No error text")
+    
+    def _detect_diagram_type(self, code: str) -> str | None:
+        """
+        Heuristically guess the diagram type keyword from the first meaningful line.
+        We skip blank lines and Mermaid comments (%% ...).
+        Returns lowercase keyword like 'flowchart', 'sequenceDiagram' -> 'sequencediagram', etc.
+        """
+        for raw_line in code.splitlines():
+            line = raw_line.strip()
+            if not line:
+                continue
+            if line.startswith("%%"):
+                continue
+
+            # first token on the line (letters, digits, dash, underscore, dot)
+            m = re.match(r"^([A-Za-z0-9_.:-]+)", line)
+            if m:
+                return m.group(1).lower()
+
+        return None
+
+
+    def _maybe_warn_diagram_type(self, code: str):
+        """
+        Decide if we should warn the user that this diagram type may not be supported
+        by their installed Mermaid CLI yet. If so, we show that warning in the
+        error log panel (non-fatal) BEFORE we actually render.
+        """
+
+        # This is our "known good / common" set for current CLI versions.
+        # NOTE: All are stored lowercase.
+        STABLE_TYPES = {
+            "flowchart", "flowchart-lr", "flowchart-rl", "flowchart-tb", "flowchart-bt",
+            "graph",
+            "sequencediagram",
+            "classdiagram",
+            "statediagram", "statediagram-v2",
+            "erdigram", "erdiagram",
+            "journey",
+            "gantt",
+            "pie",
+            "quadrantchart",
+            "requirementdiagram",
+            "gitgraph", "gitgraph",  # both spellings collapse to 'gitgraph' anyway after .lower()
+            "c4context", "c4container", "c4component", "c4dynamic",
+            "mindmap",
+            "timeline",
+            "sankey", "sankey-beta",
+            "xychart", "xychart-beta",
+            "blockdiagram",
+            "packet",
+            "kanban",
+            "architecture",    # <-- newer/experimental in some Mermaid builds
+            "radar",
+            "treemap",
+        }
+
+        # Things that exist in Mermaid spec/docs but are still considered
+        # experimental / version-sensitive. We'll gently warn on these.
+        POTENTIALLY_UNSTABLE = {
+            "architecture", "architecture-beta",
+            "c4context", "c4container", "c4component", "c4dynamic",
+            "quadrantchart",
+            "sankey", "sankey-beta",
+            "xychart", "xychart-beta",
+            "kanban",
+            "radar",
+            "treemap", "treemap-beta"
+            "blockdiagram",
+        }
+
+        dtype = self._detect_diagram_type(code)
+        if dtype is None:
+            # nothing meaningful found, don't warn
+            return
+
+        # Normalize some aliases so 'sequenceDiagram' becomes 'sequencediagram'
+        # 'erDiagram' -> 'erdiagram', etc.
+        # The _detect_diagram_type() already lowercased, so we're OK with lower comparisons.
+
+        is_known = dtype in STABLE_TYPES
+        is_unstable = dtype in POTENTIALLY_UNSTABLE
+
+        # Three situations to warn the user:
+        # 1. We don't even recognize this type at all.
+        # 2. We recognize it but it's in POTENTIALLY_UNSTABLE, which often
+        #    renders that "Syntax error in text" bomb even with exit code 0.
+        if (not is_known) or is_unstable:
+            if not is_known:
+                msg = (
+                    f"Diagram type '{dtype}' may not be supported by your Mermaid CLI.\n"
+                    "If the preview shows a 'Syntax error in text' image, this is probably why."
+                )
+            else:
+                # known, but flaky
+                msg = (
+                    f"Diagram type '{dtype}' is experimental / version-sensitive.\n"
+                    "Your Mermaid CLI may render a 'Syntax error in text' banner instead of the diagram."
+                )
+
+            # show this in the error log panel WITHOUT calling it a failure
+            self._errorlog_show(
+                msg,
+                status_msg="Warning: diagram type may not be fully supported"
+            )
+
 
 def main():
     app = MermaidStudio()

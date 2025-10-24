@@ -1,8 +1,7 @@
 # example_data.py
-# Ready-made Mermaid examples for many diagram types.
-# Import in your app and use EXAMPLES[name] to get a code snippet.
-# Some diagrams are experimental in newer Mermaid versions. Those entries
-# include a note in comments and may require mermaid-cli v10+.
+
+# All examples in this file are original works created for Mermaid Studio
+# and released under the MIT license.
 
 from __future__ import annotations
 from typing import Dict, List
@@ -145,16 +144,16 @@ EXAMPLES: Dict[str, str] = {
 
     "Quadrant Chart": r"""quadrantChart
     title Product strategy
-    x-axis Low risk -> High risk
-    y-axis Low reward -> High reward
+    x-axis Low risk --> High risk
+    y-axis Low reward --> High reward
     quadrant-1 Invest
     quadrant-2 Evaluate
     quadrant-3 Avoid
     quadrant-4 Maintain
-    A[Refactor core]        : [0.3, 0.7]
-    B[New feature X]        : [0.65, 0.6]
-    C[Prototype idea]       : [0.8, 0.3]
-    D[Reduce costs]         : [0.2, 0.4]
+    Refactor core A : [0.3, 0.7]  radius: 12
+    New feature X B : [0.65, 0.6] color: #ff5500
+    Prototype idea C : [0.8, 0.3]
+    Reduce costs D : [0.2, 0.4] stroke-color: #005500, stroke-width: 5px ,color: #55ffff
     """,
 
     "Requirement Diagram": r"""requirementDiagram
@@ -196,16 +195,18 @@ EXAMPLES: Dict[str, str] = {
     """,
 
     "C4 Diagram": r"""C4Context
-      title Web shop - System Context
-      Person(customer, "Customer", "A shopper")
-      System_Boundary(c1, "Shop") {
-        Container(web, "Web App", "React", "User interface")
-        Container(api, "API", "Python", "Business logic")
-        ContainerDb(db, "Database", "PostgreSQL", "Orders and products")
+      title Observability Platform - System Context
+      Person(sre, "On-call SRE", "Monitors production health")
+      System_Boundary(obs, "Observability Platform") {
+        Container(agent, "Collector Agent", "Go", "Scrapes metrics & logs")
+        Container(api, "Ingestion API", "Rust", "Accepts telemetry from agents")
+        ContainerDb(store, "Time-series DB", "ClickHouse", "Stores metrics/events")
+        Container(ui, "Status Dashboard", "React", "Live graphs and alerts")
       }
-      Rel(customer, web, "Uses")
-      Rel(web, api, "Calls")
-      Rel(api, db, "Reads and writes")
+      Rel(sre, ui, "Views incidents / dashboards")
+      Rel(agent, api, "Push metrics")
+      Rel(api, store, "Writes telemetry")
+      Rel(ui, api, "Queries alert summaries")
     """,
 
     "Mindmaps": r"""mindmap
@@ -230,53 +231,75 @@ EXAMPLES: Dict[str, str] = {
     """,
 
     "ZenUML": r"""zenuml
-    @startuml
-    title Sign in flow
-    User -> App: Open
-    App -> API: POST /login
-    API --> App: 200 OK + token
-    App --> User: Navigate to dashboard
-    @enduml
+        title Scaled Agile Feature Delivery
+        @Actor BusinessOwner #FFE8CC
+        @Boundary ProductManager #0747A6
+        @EC2 <<RTE>> ReleaseTrain #E3FCEF
+        group AgileTeams {
+          @Lambda TeamA
+          @Lambda TeamB
+        }
+        @Boundary DevOps #CDEBFF
+
+        @Starter(BusinessOwner)
+        ProductManager.defineFeature(feature) {
+          ReleaseTrain.planPI(feature) {
+            // Teams work in parallel during the PI
+            par {
+              TeamA.implement(feature)
+              TeamB.implement(feature)
+            }
+            ReleaseTrain.integrate(feature) {
+              DevOps.deployToProd(feature)
+            }
+          }
+        }
     """,
 
     "Sankey": r"""sankey-beta
-      title Traffic sources
-      Home[Home] -> Product[Product] : 600
-      Home -> Docs[Docs] : 150
-      Product -> Checkout[Checkout] : 250
-      Docs -> Checkout : 30
-      Product -> Exit[Exit] : 200
-      Docs -> Exit : 120
+
+    %% Global electricity generation: 2023
+    %% Units are approximate TWh-equivalent flows for illustrative purposes
+
+    Electricity grid,Coal (2023),4800
+    Electricity grid,Nuclear (2023),2700
+    Electricity grid,Hydro (2023),4200
+    Electricity grid,Wind (2023),2000
+    Electricity grid,Solar (2023),1500
+    Electricity grid,Other renewables (2023),900
     """,
 
     "XY Chart": r"""xychart-beta
-      title Response times
-      x-axis label Time (s) type linear
-      y-axis label ms type linear
-      series Backend: [ [0,120], [1,110], [2,130], [3,95] ]
-      series Frontend: [ [0,200], [1,180], [2,150], [3,140] ]
+        title "Support Tickets per Month"
+        x-axis [jan, feb, mar, apr, may, jun, jul, aug, sep, oct, nov, dec]
+        y-axis "Tickets opened" 0 --> 400
+        bar [320, 340, 360, 310, 290, 280, 260, 270, 300, 330, 350, 370]
+        line [320, 340, 360, 310, 290, 280, 260, 270, 300, 330, 350, 370]
     """,
 
-    "Block Diagram": r"""blockDiagram
-      title Payment pipeline
-      block Ingress
-        Web
-        Mobile
+    "Block Diagram": r"""block-beta
+    columns 1
+      metaLayer(("meta-yocto\n(layer)"))
+      blockArrowId1<["fetch\n&\nparse"]>(down)
+      block:BuildPipeline
+        Recipe["linux-yocto.bb"]
+        Tasks["do_configure\ndo_compile\ndo_install"]
+        RootFS["rootfs"]
       end
-      block Core
-        Auth
-        Payments
-        Ledger
-      end
-      block Storage
-        DB[(Postgres)]
-        Cache[(Redis)]
-      end
-      Web -> Auth -> Payments -> Ledger
-      Mobile -> Auth
-      Payments -> DB
-      Auth -> Cache
+      space
+      ImageOut["bootable image\n.wic/.sdimg"]
+
+      BuildPipeline --> ImageOut
+      Tasks --> RootFS
+      Recipe --> Tasks
+      metaLayer --> Recipe
+
+      style Recipe fill:#b3cde3,stroke:#225,stroke-width:2px
+      style Tasks fill:#ccebc5,stroke:#252,stroke-width:2px
+      style RootFS fill:#fff2ae,stroke:#664,stroke-width:2px
+      style ImageOut fill:#decbe4,stroke:#424,stroke-width:2px
     """,
+
 
     "Packet": r"""packet
       title HTTP request packet
@@ -289,7 +312,7 @@ EXAMPLES: Dict[str, str] = {
       106-111: "Window"
       112-127: "Checksum"
       128-143: "Urgent Ptr"
-      144-...: "Payload"
+      144-191: "Payload"
     """,
 
     "Kanban": r"""kanban
@@ -305,39 +328,40 @@ EXAMPLES: Dict[str, str] = {
         - Project skeleton
     """,
 
-    "Architecture": r"""architecture
-      title Simple web app
-      component Browser
-      component CDN
-      component WebApp
-      component API
-      database DB
-      queue Queue
-      Browser -> CDN
-      CDN -> WebApp
-      WebApp -> API
-      API -> DB
-      API -> Queue
+    "Architecture": r"""architecture-beta
+    group be(cloud)[BACKEND]
+
+    service db(database)[Database] in be
+    service disk(disk)[Storage] in be
+    service server(server)[Server] in be
+
+    group fe(cloud)[FRONTEND]
+
+    service ux(internet)[Frontend] in fe
+
+
+    db:L -- R:server
+    disk:T -- B:db
+    ux:T -- B:server
     """,
 
-    "Radar": r"""radar
-      title Tech radar
-      categories Languages, Frameworks, Infra, Data
-      series Adopt: 80, 60, 70, 50
-      series Trial: 40, 45, 35, 30
-      series Assess: 20, 25, 30, 15
+    "Radar": r"""radar-beta
+      axis l["Languages"], f["Frameworks"], i["Infra"], d["Data"], e["Connectivity"]
+      curve a["Adopt"]{ 80, 60, 70, 50,80}
+      curve b["Trial"]{ 40, 45, 35, 30,20}
+      curve c["Assess"]{ 20, 25, 30, 15,50}
     """,
 
-    "Treemap": r"""treemap
-      title Storage usage
-      section Home
-        Docs: 3
-        Photos: 7
-        Videos: 12
-      section Work
-        Reports: 5
-        Assets: 8
-    """,
+    # "Treemap": r"""treemap
+    #   title Storage usage
+    #   section Home
+    #     Docs: 3
+    #     Photos: 7
+    #     Videos: 12
+    #   section Work
+    #     Reports: 5
+    #     Assets: 8
+    # """,
 }
 
 def list_examples() -> List[str]:

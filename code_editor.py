@@ -44,7 +44,7 @@ DEFAULT_THEME = {
     "match_bg": "#fff2a8",
 }
 
-MERMAID_KEYWORDS = r"\b(graph|flowchart|flowchart-(LR|RL|TB|BT)|sequenceDiagram|classDiagram|stateDiagram|stateDiagram-v2|erDiagram|gantt|journey|pie|mindmap|timeline|gitGraph)\b"
+MERMAID_KEYWORDS = r"\b(graph|flowchart|flowchart-(LR|RL|TB|BT)|sequenceDiagram|classDiagram|stateDiagram|stateDiagram-v2|erDiagram|gantt|journey|pie|mindmap|timeline|gitGraph|architecture-beta|quadrantChart|radar|radar-beta|sankey|sankey-beta|treemap|treemap-beta|C4Context|zenuml)\b"
 MERMAID_TYPES = r"\b(subgraph|end|click|style|linkStyle|accTitle|accDescr|activate|deactivate|autonumber|dateFormat|axisFormat|section|participant|Note|classDef|direction|title|loop|alt|opt|par|rect|else)\b"
 
 # Arrows and edge operators commonly used in Mermaid
@@ -205,6 +205,9 @@ class MermaidEditor(tk.Frame):
         t.tag_configure("arrow", foreground=self.theme["arrow"])
         t.tag_configure("node", foreground=self.theme["node"])
         t.tag_configure("error", foreground=self.theme["error"], underline=True)
+        t.tag_configure("syntax_error_line", background="#ffecec")   # light red line tint
+        t.tag_configure("syntax_error_col", underline=True, foreground="#d00")
+
 
     # Change and highlight scheduling
     def _on_modified_flag(self, event=None):
@@ -432,6 +435,34 @@ class MermaidEditor(tk.Frame):
                 lead = re.match(r"[ \t]*", line_text).group(0)
                 t.insert(f"{ln}.0+{len(lead)}c", "%% ")
         return "break"
+    
+    def clear_error_highlights(self) -> None:
+        self.text.tag_remove("syntax_error_line", "1.0", "end")
+        self.text.tag_remove("syntax_error_col", "1.0", "end")
+
+    def highlight_error(self, line: int, col: int | None = None, length: int = 1) -> None:
+        ln = max(1, int(line))
+        self.text.tag_add("syntax_error_line", f"{ln}.0", f"{ln}.0 lineend+1c")
+        if col is not None:
+            c0 = max(0, int(col) - 1)
+            self.text.tag_add("syntax_error_col", f"{ln}.{c0}", f"{ln}.{c0+max(1,int(length))}")
+
+    def highlight_errors(self, items: list[tuple[int, int | None]]) -> None:
+        """
+        items: list of (line, col|None)
+        Highlights all; scrolls to the first one and puts caret there.
+        """
+        if not items:
+            return
+        self.clear_error_highlights()
+        for (line, col) in items:
+            self.highlight_error(line, col)
+        ln, col = items[0]
+        self.text.see(f"{max(1,int(ln))}.0")
+        self.text.mark_set("insert", f"{max(1,int(ln))}.{max(0,(0 if col is None else col-1))}")
+        self.text.focus_set()
+
+
 
 # Quick manual test
 if __name__ == "__main__":

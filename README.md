@@ -113,6 +113,22 @@ You can package Mermaid Studio into a single self-contained binary for Linux usi
      }
 
 ---
+### 🖼️ Exporting Diagrams
+
+Mermaid Studio currently supports **PNG export** only.  
+This is an intentional design choice to ensure a fast, predictable, and reliable workflow.
+
+When you press **Render**, Mermaid Studio uses the `mermaid-cli` (`mmdc`) tool to generate a preview PNG image.  
+The **Export PNG As…** option simply copies that already-rendered image to a user-selected location.  
+
+This approach has a few advantages:
+- ✅ **Instant export** — no need to re-run the renderer.  
+- ✅ **Error-safe** — exports are always valid, since only successful renders can be exported.  
+- ✅ **Lightweight** — avoids Chrome/Puppeteer startup overhead.  
+
+Future versions may add optional SVG, PDF, or HTML exports, but PNG remains the most portable and stable format across platforms.
+
+---
 
 ## 🪶 License
 
