@@ -15,6 +15,8 @@ from code_editor import MermaidEditor
 from preview_pane import PreviewPane
 from example_data import list_examples, get_example
 import re
+import json
+
 
 
 
@@ -41,6 +43,11 @@ class MermaidStudio(tk.Tk):
         self.last_png: Path | None = None
         self.mmdc_path: str | None = self._find_mmdc()
         self.render_lock = threading.Lock()
+                
+        # Recent files state
+        self.recent_files = []
+        self.recent_files_path = Path.home() / ".config" / "mermaid_studio" / "recent.json"
+        self._load_recent_files()
 
         # Auto render state
         self.auto_render_var = tk.BooleanVar(value=False)
@@ -65,6 +72,12 @@ class MermaidStudio(tk.Tk):
         file_menu = tk.Menu(menubar, tearoff=0)
         file_menu.add_command(label="New", command=self._new_document, accelerator="Ctrl+N")
         file_menu.add_command(label="Open...", command=self._open_file, accelerator="Ctrl+O")
+        file_menu.add_separator()
+        
+        # --- Open Recent submenu ---
+        self.recent_menu = tk.Menu(file_menu, tearoff=0)
+        file_menu.add_cascade( label="Recent", menu=self.recent_menu)
+
         file_menu.add_separator()
         file_menu.add_command(label="Save", command=self._save_file, accelerator="Ctrl+S")
         file_menu.add_command(label="Save As...", command=self._save_file_as)
@@ -180,6 +193,34 @@ class MermaidStudio(tk.Tk):
         self.bind_all("<Control-n>", lambda e: self._new_document())
         self.bind_all("<Control-o>", lambda e: self._open_file())
         self.bind_all("<Control-s>", lambda e: self._save_file())
+        self._rebuild_recent_menu()
+    
+    def _rebuild_recent_menu(self):
+        """Refresh the Open Recent submenu."""
+        # Clear it first
+        self.recent_menu.delete(0, "end")
+
+        if not self.recent_files:
+            # gray disabled item if no recent files
+            self.recent_menu.add_command(
+                label="(No recent files)",
+                state="disabled"
+            )
+        else:
+            # Add each path
+            for idx, fpath in enumerate(self.recent_files, start=1):
+                nice_label = Path(fpath).name
+                full_path = fpath  # capture now for lambda default
+                self.recent_menu.add_command(
+                    label=f"{idx}. {nice_label}",
+                    command=lambda p=full_path: self._open_recent_file(p)
+                )
+            self.recent_menu.add_separator()
+            self.recent_menu.add_command(
+                label="Clear list",
+                command=self._clear_recent_files
+            )
+
 
     def _errorlog_show(self, text: str, status_msg: str | None = None):
         # Trim puppeteer stack noise if present (Parser3.parseError and below)
@@ -299,10 +340,14 @@ class MermaidStudio(tk.Tk):
             self.editor.set_text(content)
             self.current_file = Path(path)
             self._set_title()
-            self.status.configure(text=f"Opened {Path(path).name}")
+            self._set_status(f"Opened {Path(path).name}")
             self.editor.focus_editor()
+
+            self._add_recent_file(self.current_file)
+
         except Exception as e:
             messagebox.showerror("Error", f"Could not open file:\n{e}")
+
 
     def _save_file(self, force_dialog: bool = False):
         if self.current_file is None or force_dialog:
@@ -325,7 +370,11 @@ class MermaidStudio(tk.Tk):
             return
         self.current_file = Path(path)
         self._set_title()
+
+        self._add_recent_file(self.current_file)
+
         return self._save_file()
+
 
     def _export_png_as(self):
         if self.last_png is None or not self.last_png.exists():
@@ -356,6 +405,71 @@ class MermaidStudio(tk.Tk):
         self.current_file = None
         self._set_title()
         self._set_status(f"Loaded example: {name}")
+
+    def _load_recent_files(self):
+        """Load recent files list from disk."""
+        try:
+            data_dir = self.recent_files_path.parent
+            data_dir.mkdir(parents=True, exist_ok=True)
+
+            if self.recent_files_path.exists():
+                with open(self.recent_files_path, "r", encoding="utf-8") as f:
+                    arr = json.load(f)
+                # keep only files that still exist
+                self.recent_files = [p for p in arr if Path(p).exists()]
+            else:
+                self.recent_files = []
+        except Exception:
+            self.recent_files = []
+
+    def _save_recent_files(self):
+        """Persist recent files to disk."""
+        try:
+            with open(self.recent_files_path, "w", encoding="utf-8") as f:
+                json.dump(self.recent_files, f, indent=2)
+        except Exception:
+            pass  # don't crash UI if writing fails
+
+    def _add_recent_file(self, path: Path):
+        """Add a file path to the MRU list and rebuild the menu."""
+        p = str(path)
+        # move to front, dedupe
+        self.recent_files = [f for f in self.recent_files if f != p]
+        self.recent_files.insert(0, p)
+        # cap at 5
+        self.recent_files = self.recent_files[:5]
+        self._save_recent_files()
+        self._rebuild_recent_menu()
+
+    def _clear_recent_files(self):
+        """Clear MRU list."""
+        self.recent_files = []
+        self._save_recent_files()
+        self._rebuild_recent_menu()
+
+    def _open_recent_file(self, filepath: str):
+        """Open file from recent list without showing the file picker."""
+        path = Path(filepath)
+        if not path.exists():
+            # file missing → remove from list and warn
+            messagebox.showwarning("File not found", f"{path} no longer exists.")
+            self.recent_files = [f for f in self.recent_files if f != filepath]
+            self._save_recent_files()
+            self._rebuild_recent_menu()
+            return
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                content = f.read()
+            self.editor.set_text(content)
+            self.current_file = path
+            self._set_title()
+            self._set_status(f"Opened {path.name}")
+            self.editor.focus_editor()
+            # bump it to front again
+            self._add_recent_file(path)
+        except Exception as e:
+            messagebox.showerror("Error", f"Could not open file:\n{e}")
+
 
 
     # - Render
