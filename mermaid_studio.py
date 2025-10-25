@@ -16,6 +16,8 @@ from preview_pane import PreviewPane
 from example_data import list_examples, get_example
 import re
 import json
+import webbrowser
+
 
 
 
@@ -73,7 +75,7 @@ class MermaidStudio(tk.Tk):
         file_menu.add_command(label="New", command=self._new_document, accelerator="Ctrl+N")
         file_menu.add_command(label="Open...", command=self._open_file, accelerator="Ctrl+O")
         file_menu.add_separator()
-        
+
         # --- Open Recent submenu ---
         self.recent_menu = tk.Menu(file_menu, tearoff=0)
         file_menu.add_cascade( label="Recent", menu=self.recent_menu)
@@ -113,6 +115,21 @@ class MermaidStudio(tk.Tk):
         settings_menu.add_command(label="Set mmdc path...", command=self._set_mmdc_path)
         settings_menu.add_command(label="About", command=self._about)
         menubar.add_cascade(label="Settings", menu=settings_menu)
+
+        # Help menu
+        help_menu = tk.Menu(menubar, tearoff=0)
+        help_menu.add_command(
+            label="Keyboard Shortcuts…",
+            command=self._show_shortcuts_dialog
+        )
+        help_menu.add_separator()
+        help_menu.add_command(
+            label="Mermaid Docs…",
+            command=self._open_mermaid_docs
+        )
+        menubar.add_cascade(label="Help", menu=help_menu)
+
+        self.config(menu=menubar)
 
         self.config(menu=menubar)
 
@@ -508,6 +525,62 @@ class MermaidStudio(tk.Tk):
             out_png = cache_dir / f"mstudio_{uuid.uuid4().hex}.png"
 
         self._render_async(input_file=temp_input_path, output_png=out_png)
+
+    def _show_shortcuts_dialog(self):
+        """Popup window listing common keyboard shortcuts."""
+        win = tk.Toplevel(self)
+        win.title("Keyboard Shortcuts")
+        win.transient(self)
+        win.resizable(False, False)
+
+        # basic padding frame
+        body = ttk.Frame(win, padding=16)
+        body.grid(row=0, column=0, sticky="nsew")
+
+        # rows of "Action  |  Shortcut"
+        shortcuts = [
+            ("New file",            "Ctrl+N"),
+            ("Open file…",          "Ctrl+O"),
+            ("Save",                "Ctrl+S"),
+            ("Render",              "Click Render / Auto render"),
+            ("Undo",                "Ctrl+Z"),
+            ("Redo",                "Ctrl+Y"),
+            ("Cut",                 "Ctrl+X"),
+            ("Copy",                "Ctrl+C"),
+            ("Paste",               "Ctrl+V"),
+            ("Select All",          "Ctrl+A"),
+            ("Toggle Auto render",  "Click checkbox in toolbar"),
+        ]
+
+        # Title label
+        ttk.Label(body, text="Keyboard Shortcuts", font=("Segoe UI", 12, "bold")).grid(
+            row=0, column=0, columnspan=2, sticky="w"
+        )
+
+        # Table-ish layout
+        for idx, (action, combo) in enumerate(shortcuts, start=1):
+            ttk.Label(body, text=action).grid(row=idx, column=0, sticky="w", padx=(0, 16), pady=2)
+            ttk.Label(body, text=combo, foreground="#555").grid(row=idx, column=1, sticky="e", pady=2)
+
+        # Close button
+        btn_frame = ttk.Frame(body)
+        btn_frame.grid(row=len(shortcuts) + 1, column=0, columnspan=2, sticky="e", pady=(12, 0))
+        ttk.Button(btn_frame, text="Close", command=win.destroy).grid(row=0, column=0, sticky="e")
+
+        # make sure dialog is above main window and grabs focus
+        win.grab_set()
+        win.focus_force()
+
+
+    def _open_mermaid_docs(self):
+        """Open official Mermaid documentation in the user's default browser."""
+        url = "https://docs.mermaidchart.com/mermaid-oss/intro/index.html"
+        try:
+            webbrowser.open(url)
+            self._set_status("Opened Mermaid docs in browser")
+        except Exception as e:
+            messagebox.showerror("Error", f"Couldn't open browser:\n{e}")
+
 
 
     def _find_chrome(self) -> str | None:
