@@ -17,12 +17,9 @@ from example_data import list_examples, get_example
 import re
 import json
 import webbrowser
+from theme import ThemeManager
 
-
-
-
-
-APP_VERSION = "0.2.1"
+APP_VERSION = "0.2.3"
 
 APP_TITLE = "Mermaid Studio - Python UI"
 DEFAULT_SAMPLE = """flowchart LR
@@ -37,6 +34,11 @@ class MermaidStudio(tk.Tk):
         self.title(f"{APP_TITLE} v{APP_VERSION}")
         self.geometry("1200x700")
         self.minsize(800, 500)
+
+        # Theme manager
+        self.theme_manager = ThemeManager(self)
+
+        # Chrome path
         self.chrome_path: str | None = self._find_chrome()
 
 
@@ -111,10 +113,15 @@ class MermaidStudio(tk.Tk):
         menubar.add_cascade(label="Examples", menu=examples_menu)
 
         # Settings menu
-        settings_menu = tk.Menu(menubar, tearoff=0)
-        settings_menu.add_command(label="Set mmdc path...", command=self._set_mmdc_path)
-        settings_menu.add_command(label="About", command=self._about)
-        menubar.add_cascade(label="Settings", menu=settings_menu)
+        self.settings_menu = tk.Menu(menubar, tearoff=0)
+        self.settings_menu.add_command(label="Set mmdc path...", command=self._set_mmdc_path)
+
+        # Theme toggle menu item (index 1 in this menu)
+        self.settings_menu.add_command(label="Use Dark Theme", command=self._toggle_theme_clicked)
+
+        self.settings_menu.add_separator()
+        self.settings_menu.add_command(label="About", command=self._about)
+        menubar.add_cascade(label="Settings", menu=self.settings_menu)
 
         # Help menu
         help_menu = tk.Menu(menubar, tearoff=0)
@@ -134,21 +141,21 @@ class MermaidStudio(tk.Tk):
         self.config(menu=menubar)
 
         # Toolbar
-        toolbar = ttk.Frame(self, padding=(6, 4))
-        toolbar.grid(row=0, column=0, sticky="ew")   # grid is fine here (toolbar in root)
+        self.toolbar = ttk.Frame(self, padding=(6, 4))
+        self.toolbar.grid(row=0, column=0, sticky="ew")   # grid is fine here (toolbar in root)
 
         # Left-aligned controls
-        self.render_btn = ttk.Button(toolbar, text="Render", command=self._render_clicked)
+        self.render_btn = ttk.Button(self.toolbar, text="Render", command=self._render_clicked)
         self.render_btn.pack(side="left", padx=(0, 8))
 
         self.auto_cb = ttk.Checkbutton(
-            toolbar, text="Auto render", variable=self.auto_render_var,
+            self.toolbar, text="Auto render", variable=self.auto_render_var,
             command=self._on_autorender_toggle
         )
         self.auto_cb.pack(side="left")
 
         # Right-aligned status
-        self.status = ttk.Label(toolbar, text="Ready", anchor="e")
+        self.status = ttk.Label(self.toolbar, text="Ready", anchor="e")
         self.status.pack(side="right")
 
         # Paned window: editor | preview
@@ -211,6 +218,21 @@ class MermaidStudio(tk.Tk):
         self.bind_all("<Control-o>", lambda e: self._open_file())
         self.bind_all("<Control-s>", lambda e: self._save_file())
         self._rebuild_recent_menu()
+
+        # Give ThemeManager references so it can repaint
+        self.theme_manager.toolbar = self.toolbar
+        self.theme_manager.status_label = self.status
+        self.theme_manager.editor_widget = self.editor
+        self.theme_manager.err_text = self.err_text
+        self.theme_manager.err_frame = self.err_frame
+        self.theme_manager.preview_widget = self.preview
+
+        # Apply whichever theme was loaded (light or dark)
+        self.theme_manager.apply_theme()
+
+        # Make sure the toggle menu item shows the alternative theme
+        self._update_theme_menu_label()
+
     
     def _rebuild_recent_menu(self):
         """Refresh the Open Recent submenu."""
@@ -237,6 +259,26 @@ class MermaidStudio(tk.Tk):
                 label="Clear list",
                 command=self._clear_recent_files
             )
+
+    def _toggle_theme_clicked(self):
+        # flip theme
+        self.theme_manager.toggle_theme()
+        # update menu label every time
+        self._update_theme_menu_label()
+
+    def _update_theme_menu_label(self):
+        # In self.settings_menu:
+        # index 0 = "Set mmdc path..."
+        # index 1 = theme toggle item
+        # index 2 = separator
+        # index 3 = "About"
+
+        if self.theme_manager.current_name == "dark":
+            new_label = "Use Light Theme"
+        else:
+            new_label = "Use Dark Theme"
+
+        self.settings_menu.entryconfig(1, label=new_label)
 
 
     def _errorlog_show(self, text: str, status_msg: str | None = None):
@@ -620,9 +662,16 @@ class MermaidStudio(tk.Tk):
                     messagebox.showerror("Render failed", f"Input file not found: {input_file}")
                     return
 
-                cmd = [self.mmdc_path, "-i", str(input_file.resolve()), "-o", str(output_png.resolve())]
-                cmd = [self.mmdc_path, "-i", str(input_file.resolve()), "-o", str(output_png.resolve())]
-                cmd += ["-b", "white", "-w", "2048"]
+                # call mmdc (mermaid cli)
+                bg_for_render = self.theme_manager.get_render_background()
+                cmd = [
+                self.mmdc_path,
+                    "-i", str(input_file.resolve()),
+                    "-o", str(output_png.resolve()),
+                    "-b", bg_for_render,
+                    "-w", "2048",
+                ]   
+
                 config_path = Path.home() / ".config" / "mermaid_studio" / "puppeteer.json"
                 if config_path.exists():
                     cmd += ["-p", str(config_path)]

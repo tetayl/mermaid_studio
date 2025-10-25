@@ -29,6 +29,7 @@ class PreviewPane(tk.Frame):
     def __init__(self, master, *, bg="#f5f5f5"):
         super().__init__(master, background=bg)
         self.bg = bg
+        self.placeholder_fg = "#888"  # default light grey for placeholder text
 
         # Layout
         self.rowconfigure(0, weight=1)
@@ -41,7 +42,7 @@ class PreviewPane(tk.Frame):
         # Reset button (top-right overlay)
         self.btn_reset = ttk.Button(self, text="⟲", width=2, command=self.reset_view)
         self.btn_reset.place(relx=1.0, rely=0.0, anchor="ne", x=-8, y=8)
-        self.btn_reset.lower(self.canvas)  # initially under placeholder, will be raised after first image
+        self.btn_reset.lower(self.canvas)
 
         # Internal state
         self._src_image: Optional[Image.Image] = None   # original PIL image
@@ -75,13 +76,13 @@ class PreviewPane(tk.Frame):
     # Public API ---------------------------------------------------------------
 
     def display(self, image_path: str | Path) -> None:
-        """Load and show an image. Initial view is fit-to-window and centered."""
+        # (unchanged)
         path = Path(image_path)
         self._src_image = Image.open(path).convert("RGBA")
         self._clear_placeholder()
         self._fit_to_window()
         self._render_image()
-        self.btn_reset.lift()  # show reset above canvas
+        self.btn_reset.lift()
 
     def set_placeholder(self, text: str = "No preview rendered yet") -> None:
         self.canvas.delete("all")
@@ -91,7 +92,7 @@ class PreviewPane(tk.Frame):
             self.canvas.winfo_width() // 2 or 200,
             self.canvas.winfo_height() // 2 or 120,
             text=text,
-            fill="#888",
+            fill=self.placeholder_fg,  # use current theme's placeholder fg
             font=("Segoe UI", 14, "italic"),
             anchor="center",
         )
@@ -103,6 +104,32 @@ class PreviewPane(tk.Frame):
             return
         self._fit_to_window()
         self._render_image()
+
+    def set_theme_colors(self, bg_color: str, placeholder_fg: str, border_color: str) -> None:
+        """
+        Called by ThemeManager when theme changes.
+        bg_color: preview background
+        placeholder_fg: text color for 'No preview yet'
+        border_color: outline color around preview frame (optional aesthetic)
+        """
+        self.bg = bg_color
+        self.placeholder_fg = placeholder_fg
+
+        # Frame background
+        self.configure(background=bg_color, highlightthickness=1, highlightbackground=border_color)
+
+        # Canvas background
+        self.canvas.configure(background=bg_color)
+
+        # Reset button style we leave to ttk themeing, so nothing here.
+
+        # If we're currently showing the placeholder text (no image displayed),
+        # redraw placeholder so it picks up the new placeholder_fg.
+        if self._src_image is None:
+            self.set_placeholder("No preview rendered yet")
+        else:
+            # we do have an image, so just force a re-render to clear any highlight mismatch
+            self._render_image()
 
     # Internal helpers ---------------------------------------------------------
 
