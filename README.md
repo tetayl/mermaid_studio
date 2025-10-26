@@ -1,20 +1,29 @@
 # Mermaid Studio (Python UI)
 
-A lightweight desktop GUI for Mermaid diagrams, built with Python + Tkinter.  
-It provides a simple two-pane interface: a text editor on the left for Mermaid code and a live rendered preview on the right.
+A lightweight desktop GUI for **Mermaid diagrams**, built with **Python + Tkinter**.  
+It provides a simple two-pane interface: a text editor on the left for Mermaid code and a live rendered preview on the right.  
+
+Mermaid Studio is designed to be **fast, offline-friendly, and minimal** — a native alternative to browser or Electron-based editors.
 
 ![Mermaid Studio Screenshot](Screenshot.png)
+*Main window with default light theme and an example.*
 
 ---
 
 ## ✨ Features
 
-- Write and edit Mermaid flowcharts, sequence diagrams, and more.
-- Render diagrams to PNG with one click (via mermaid-cli).
-- Save and open .mmd files.
-- Export rendered PNGs.
-- Configurable mmdc path.
-- Simple, dependency-light Python desktop app (no Electron).
+- **Write and edit Mermaid code** for flowcharts, sequence diagrams, Gantt charts, ER diagrams, and more.
+- **Instant PNG rendering** via [mermaid-cli](https://github.com/mermaid-js/mermaid-cli).
+- **Auto-render mode** with adjustable delay.
+- **Light and Dark UI themes** with synchronized preview backgrounds.
+- **Selectable Mermaid diagram theme** (Default, Forest, Dark, Neutral).
+- **Optional “Sketch” mode** for a hand-drawn look when supported.
+- **Save prompt before exit** if unsaved edits are detected.
+- **Recent file history** under *File → Recent*.
+- **Error highlighting** and inline log viewer for Mermaid parser messages.
+- **Zoomable and pannable preview pane** with reset-to-fit button.
+- **Configurable mmdc path** and Puppeteer Chrome binary.
+- **Lightweight** — pure Python + Pillow, no Electron or webserver.
 
 ---
 
@@ -66,20 +75,55 @@ It provides a simple two-pane interface: a text editor on the left for Mermaid c
 
    python3 mermaid_studio.py
 
-When launched, you can:  
-- Edit Mermaid code in the left pane.  
-- Click "Render" to generate a PNG.  
-- Use "File → Save" or "Export PNG As..." as needed.
+When launched, you can:
+- Edit Mermaid code in the left pane.
+- Click **Render** to generate a PNG preview.
+- Use **Auto render** for live updates.
+- Switch **UI theme** (Light/Dark) and **Mermaid diagram theme** from *Settings*.
+- Toggle **Sketch mode** to enable a hand-drawn style.
+- Use *File → Export PNG As…* to save rendered diagrams.
+
+![Dark Theme Example](docs/Screenshot3.png)  
+*Dark mode with Dark Mermaid theme.*
 
 ---
 
-## 🧠 Notes
+## 💾 File Handling and Temporary Cache
 
-- If the render button seems to do nothing, check:  
-  - Settings → Set mmdc path... points to your actual mmdc binary (for example /usr/local/bin/mmdc).  
-  - Your Puppeteer config file (~/.config/mermaid_studio/puppeteer.json) points to a valid Chrome binary.  
-- Temporary files are written to ~/mermaid_studio_cache.  
-- Output PNGs are rendered next to your .mmd files or in the cache folder.
+- Temporary files are stored under  
+  `~/.mermaid_studio_cache/`  
+  (hidden by default to keep your home directory tidy).
+
+- Old PNGs are automatically removed between renders to avoid clutter.
+
+- Mermaid Studio prompts to **save before exit** if edits are unsaved.
+
+---
+
+## 🧠 Troubleshooting
+
+If rendering doesn’t work:
+
+- Ensure **Settings → Set mmdc path...** points to your actual `mmdc` binary (e.g. `/usr/local/bin/mmdc`).
+- Check your Puppeteer config at  
+  `~/.config/mermaid_studio/puppeteer.json`  
+  references a valid Chrome path.
+- Test that `mmdc` runs in a terminal.
+- Temporary `.mmd` source files appear in `~/.mermaid_studio_cache/` for inspection.
+
+---
+
+## 🖼️ Exporting Diagrams
+
+Mermaid Studio currently supports **PNG export** only.
+
+When you click **Render**, `mmdc` generates a PNG preview.  
+**Export PNG As…** simply copies that rendered image — ensuring exports always match your current preview.
+
+Advantages:
+- ✅ Instant exports (no extra rendering step)
+- ✅ Error-safe (only successful diagrams can be exported)
+- ✅ Portable (PNG works everywhere)
 
 ---
 
@@ -113,22 +157,6 @@ You can package Mermaid Studio into a single self-contained binary for Linux usi
      }
 
 ---
-### 🖼️ Exporting Diagrams
-
-Mermaid Studio currently supports **PNG export** only.  
-This is an intentional design choice to ensure a fast, predictable, and reliable workflow.
-
-When you press **Render**, Mermaid Studio uses the `mermaid-cli` (`mmdc`) tool to generate a preview PNG image.  
-The **Export PNG As…** option simply copies that already-rendered image to a user-selected location.  
-
-This approach has a few advantages:
-- ✅ **Instant export** — no need to re-run the renderer.  
-- ✅ **Error-safe** — exports are always valid, since only successful renders can be exported.  
-- ✅ **Lightweight** — avoids Chrome/Puppeteer startup overhead.  
-
-Future versions may add optional SVG, PDF, or HTML exports, but PNG remains the most portable and stable format across platforms.
-
----
 
 ## 🪶 License
 
@@ -141,3 +169,4 @@ MIT License © 2025
 - Mermaid.js (https://mermaid.js.org/)  
 - @mermaid-js/mermaid-cli (https://github.com/mermaid-js/mermaid-cli)  
 - Tkinter (Python standard GUI)
+- Pillow (image handling for preview rendering)
