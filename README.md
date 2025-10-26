@@ -83,7 +83,7 @@ When launched, you can:
 - Toggle **Sketch mode** to enable a hand-drawn style.
 - Use *File → Export PNG As…* to save rendered diagrams.
 
-![Dark Theme Example](docs/Screenshot3.png)  
+![Dark Theme Example](Screenshot3.png)  
 *Dark mode with Dark Mermaid theme.*
 
 ---
