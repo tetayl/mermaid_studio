@@ -47,6 +47,9 @@ class MermaidStudio(tk.Tk):
         self.last_png: Path | None = None
         self.mmdc_path: str | None = self._find_mmdc()
         self.render_lock = threading.Lock()
+        self.dirty = False
+        self.protocol("WM_DELETE_WINDOW", self._on_exit)
+
                 
         # Recent files state
         self.recent_files = []
@@ -88,7 +91,7 @@ class MermaidStudio(tk.Tk):
         file_menu.add_separator()
         file_menu.add_command(label="Export PNG As...", command=self._export_png_as)
         file_menu.add_separator()
-        file_menu.add_command(label="Exit", command=self.quit)
+        file_menu.add_command(label="Exit", command=self._on_exit)
         menubar.add_cascade(label="File", menu=file_menu)
 
         # Edit Menu
@@ -364,6 +367,7 @@ class MermaidStudio(tk.Tk):
 
 
     def _on_editor_changed(self):
+        self.dirty = True
         self._set_status("Edited")
         if self.auto_render_var.get():
             self._schedule_autorender()
@@ -421,6 +425,8 @@ class MermaidStudio(tk.Tk):
 
     # - File operations
     def _new_document(self, initial_text: str = ""):
+        if not self._maybe_prompt_save():
+            return
         self.current_file = None
         self._set_title()
         self.editor.set_text((initial_text.strip() + "\n \n") if initial_text else "")
@@ -428,6 +434,8 @@ class MermaidStudio(tk.Tk):
         self.editor.focus_editor()
 
     def _open_file(self):
+        if not self._maybe_prompt_save():
+            return
         path = filedialog.askopenfilename(
             title="Open Mermaid file",
             filetypes=[("Mermaid files", "*.mmd *.mermaid *.mmdc"), ("All files", "*.*")],
@@ -448,6 +456,24 @@ class MermaidStudio(tk.Tk):
         except Exception as e:
             messagebox.showerror("Error", f"Could not open file:\n{e}")
 
+    def _maybe_prompt_save(self) -> bool:
+        """Ask to save unsaved changes. Return True if it's OK to proceed."""
+        if not self.dirty:
+            return True
+
+        response = messagebox.askyesnocancel(
+            "Unsaved changes",
+            "You have unsaved changes. Do you want to save them before continuing?",
+        )
+        if response is None:
+            # Cancel pressed
+            return False
+        if response:
+            saved = self._save_file()
+            if saved is None:
+                return False
+        # Either saved or chose "No"
+        return True
 
     def _save_file(self, force_dialog: bool = False):
         if self.current_file is None or force_dialog:
@@ -456,6 +482,7 @@ class MermaidStudio(tk.Tk):
             with open(self.current_file, "w", encoding="utf-8") as f:
                 f.write(self.editor.get())
             self.status.configure(text=f"Saved {self.current_file.name}")
+            self.dirty = False
             return self.current_file
         except Exception as e:
             messagebox.showerror("Error", f"Could not save file:\n{e}")
@@ -475,6 +502,9 @@ class MermaidStudio(tk.Tk):
 
         return self._save_file()
 
+    def _on_exit(self):
+        if self._maybe_prompt_save():
+            self.destroy()
 
     def _export_png_as(self):
         if self.last_png is None or not self.last_png.exists():
