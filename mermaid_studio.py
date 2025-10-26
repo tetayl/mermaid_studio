@@ -22,10 +22,14 @@ from theme import ThemeManager
 APP_VERSION = "0.2.4"
 
 APP_TITLE = "Mermaid Studio - Python UI"
-DEFAULT_SAMPLE = """flowchart LR
-    A[Objective] --> B[Steps]
-    B[Steps] --> C[Expected result]
-    C[Expected result] --> D[Severity if failed]
+DEFAULT_SAMPLE = """flowchart TD
+    A[Friday afternoon] --> B{Do you feel lucky?}
+    B -->|Yes| C[Deploy! 🚀]
+    B -->|No| D[Go home 🏠]
+    C --> E{Production on fire? 🔥}
+    E -->|Yes| F[Panic & rollback!]
+    E -->|No| G[Celebrate 🎉]
+    F --> G
 """
 
 class MermaidStudio(tk.Tk):
