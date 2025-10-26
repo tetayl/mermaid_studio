@@ -80,31 +80,28 @@ DARK_THEME = {
         "node": "#c586c0",
         "error": "#ff5555",
         "current_line": "#2a2d2e",
-        "match_bg": "#3a3d41",
+        "match_bg": "#3a3d41",  
     }
 }
 
 CONFIG_DIR = os.path.join(os.path.expanduser("~"), ".config", "mermaid_studio")
 CONFIG_FILE = os.path.join(CONFIG_DIR, "theme.json")
 
-def _load_saved_theme_name(default="light"):
+def _load_config():
     try:
         with open(CONFIG_FILE, "r", encoding="utf-8") as f:
-            data = json.load(f)
-            name = data.get("theme")
-            if name in ("light", "dark"):
-                return name
+            return json.load(f)
     except Exception:
-        pass
-    return default
+        return {}
 
-def _save_theme_name(name: str):
+def _save_config(data: dict):
     try:
         os.makedirs(CONFIG_DIR, exist_ok=True)
         with open(CONFIG_FILE, "w", encoding="utf-8") as f:
-            json.dump({"theme": name}, f)
+            json.dump(data, f)
     except Exception:
         pass
+
 
 
 class ThemeManager:
@@ -118,9 +115,16 @@ class ThemeManager:
     def __init__(self, app_root_tk):
         self.root = app_root_tk
 
-        initial_name = _load_saved_theme_name(default="light")
-        self.current_name = initial_name
-        self.theme = self._theme_from_name(initial_name)
+        config = _load_config()
+        initial_ui = config.get("ui_theme", "light")
+        initial_diagram = config.get("diagram_theme", "default")
+        initial_sketch_mode    = config.get("sketch_mode", False)          # bool
+
+        self.current_name = initial_ui              # "light" / "dark"
+        self.diagram_theme = initial_diagram        # "default" / "forest" / "dark" / "neutral"
+        self.sketch_mode = initial_sketch_mode
+
+        self.theme = self._theme_from_name(initial_ui)
 
         # widgets we will paint
         self.toolbar = None          # ttk.Frame
@@ -133,6 +137,15 @@ class ThemeManager:
         # We'll also define a ttk.Style so ttk widgets inherit sane bg/fg in dark mode
         self.ttk_style = ttk.Style(self.root)
 
+    def _save_state(self):
+        cfg = {
+            "ui_theme": self.current_name,
+            "diagram_theme": self.diagram_theme,
+            "sketch_mode": self.sketch_mode,
+        }
+        _save_config(cfg)
+
+
     def _theme_from_name(self, name: str):
         return DARK_THEME if name == "dark" else LIGHT_THEME
 
@@ -142,13 +155,31 @@ class ThemeManager:
     def set_theme(self, name: str):
         self.current_name = name
         self.theme = self._theme_from_name(name)
-        _save_theme_name(name)
         self.apply_theme()
+        self._save_state()
+
+    def set_diagram_theme(self, diagram_theme_name: str):
+        # accept only known themes
+        allowed = ("default", "forest", "dark", "neutral")
+        if diagram_theme_name not in allowed:
+            return
+        self.diagram_theme = diagram_theme_name
+        self._save_state()
+
+    def get_diagram_theme(self) -> str:
+        return self.diagram_theme
 
     def get_render_background(self) -> str:
         # Return a color string usable for mmdc -b
         return self.theme["preview_bg"]
 
+    # sketch controls
+    def set_sketch_mode(self, enabled: bool):
+        self.sketch_mode = bool(enabled)
+        self._save_state()
+
+    def get_sketch_mode(self) -> bool:
+        return bool(self.sketch_mode)
 
     def apply_theme(self):
         t = self.theme

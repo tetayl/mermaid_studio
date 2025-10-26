@@ -19,7 +19,7 @@ import json
 import webbrowser
 from theme import ThemeManager
 
-APP_VERSION = "0.2.3"
+APP_VERSION = "0.2.4"
 
 APP_TITLE = "Mermaid Studio - Python UI"
 DEFAULT_SAMPLE = """flowchart LR
@@ -116,12 +116,39 @@ class MermaidStudio(tk.Tk):
         self.settings_menu = tk.Menu(menubar, tearoff=0)
         self.settings_menu.add_command(label="Set mmdc path...", command=self._set_mmdc_path)
 
-        # Theme toggle menu item (index 1 in this menu)
+        # Mermaid diagram theme submenu
+        self.diagram_theme_var = tk.StringVar(value=self.theme_manager.get_diagram_theme())
+        self.diagram_theme_menu = tk.Menu(self.settings_menu, tearoff=0)
+        for label, value in [
+            ("Default", "default"),
+            ("Forest", "forest"),
+            ("Dark", "dark"),
+            ("Neutral", "neutral"),
+        ]:
+            self.diagram_theme_menu.add_radiobutton(
+                label=label,
+                value=value,
+                variable=self.diagram_theme_var,
+                command=lambda v=value: self._on_diagram_theme_selected(v),
+            )
+        self.settings_menu.add_cascade(label="Mermaid diagram theme", menu=self.diagram_theme_menu)
+
+
+        # Sketch mode toggle
+        self.sketch_var = tk.BooleanVar(value=self.theme_manager.get_sketch_mode())
+        self.settings_menu.add_checkbutton(
+            label="Sketch style (hand-drawn)",
+            variable=self.sketch_var,
+            command=self._on_sketch_toggled,
+        )
+
+        # UI Theme toggle (light/dark)
         self.settings_menu.add_command(label="Use Dark Theme", command=self._toggle_theme_clicked)
 
         self.settings_menu.add_separator()
         self.settings_menu.add_command(label="About", command=self._about)
         menubar.add_cascade(label="Settings", menu=self.settings_menu)
+
 
         # Help menu
         help_menu = tk.Menu(menubar, tearoff=0)
@@ -260,6 +287,13 @@ class MermaidStudio(tk.Tk):
                 command=self._clear_recent_files
             )
 
+    def _on_diagram_theme_selected(self, theme_name: str):
+        # Tell ThemeManager
+        self.theme_manager.set_diagram_theme(theme_name)
+        # Status bar feedback (optional)
+        self._set_status(f"Diagram theme: {theme_name}")
+
+
     def _toggle_theme_clicked(self):
         # flip theme
         self.theme_manager.toggle_theme()
@@ -278,7 +312,14 @@ class MermaidStudio(tk.Tk):
         else:
             new_label = "Use Dark Theme"
 
-        self.settings_menu.entryconfig(1, label=new_label)
+        self.settings_menu.entryconfig(3, label=new_label)
+
+    def _on_sketch_toggled(self):
+        enabled = bool(self.sketch_var.get())
+        self.theme_manager.set_sketch_mode(enabled)
+        # tiny UX touch
+        self._set_status("Sketch style: on" if enabled else "Sketch style: off")
+
 
 
     def _errorlog_show(self, text: str, status_msg: str | None = None):
@@ -548,14 +589,38 @@ class MermaidStudio(tk.Tk):
         # Warn early if this diagram type is likely unsupported/experimental
         self._maybe_warn_diagram_type(code)
 
+        # Prepare code_to_render with optional sketch header
+        sketch_enabled = self.theme_manager.get_sketch_mode()
+        diagram_theme = self.theme_manager.get_diagram_theme()
+
+        # Do we already have some kind of config/init block at the top?
+        # We'll skip injecting if the user already has frontmatter (starts with '---')
+        # OR an init directive (%%{init: ...}%%). We don't want to double-config.
+        has_frontmatter = code.lstrip().startswith("---")
+        has_init_block = code.lstrip().startswith("%%{init:")
+
+        if sketch_enabled and not (has_frontmatter or has_init_block):
+            # Build an init header that sets theme + handDrawn true
+            # We include the diagram theme here as well, so CLI and header agree.
+            header = (
+                "---\n"
+                "config:\n"
+                f"  look: handDrawn\n"
+                f"  theme: {diagram_theme}\n"
+                "---\n"
+            )
+            code_to_render = header + code
+        else:
+            code_to_render = code
+
         # Write under $HOME/mermaid_studio_cache so the Snap can read it
-        cache_dir = Path.home() / "mermaid_studio_cache"
+        cache_dir = Path.home() / ".cache" / "mermaid_studio"
         cache_dir.mkdir(parents=True, exist_ok=True)
 
         import uuid
         temp_input_path = cache_dir / f"mstudio_{uuid.uuid4().hex}.mmd"
         with open(temp_input_path, "w", encoding="utf-8") as f:
-            f.write(code)
+            f.write(code_to_render)
         # Ensure readable by confined processes
         os.chmod(temp_input_path, 0o644)
 
@@ -564,7 +629,8 @@ class MermaidStudio(tk.Tk):
             out_dir = self.current_file.parent
             out_png = out_dir / (self.current_file.stem + ".png")
         else:
-            out_png = cache_dir / f"mstudio_{uuid.uuid4().hex}.png"
+            #out_png = cache_dir / f"mstudio_{uuid.uuid4().hex}.png"
+            out_png = cache_dir / f"mstudio_preview.png"
 
         self._render_async(input_file=temp_input_path, output_png=out_png)
 
@@ -664,12 +730,15 @@ class MermaidStudio(tk.Tk):
 
                 # call mmdc (mermaid cli)
                 bg_for_render = self.theme_manager.get_render_background()
+                diagram_theme = self.theme_manager.get_diagram_theme()
+                
                 cmd = [
                 self.mmdc_path,
                     "-i", str(input_file.resolve()),
                     "-o", str(output_png.resolve()),
                     "-b", bg_for_render,
                     "-w", "2048",
+                    "--theme", diagram_theme,
                 ]   
 
                 config_path = Path.home() / ".config" / "mermaid_studio" / "puppeteer.json"
