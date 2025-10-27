@@ -262,7 +262,7 @@ class MermaidStudio(tk.Tk):
 
 
         paned.add(preview_frame, weight=1)
-        # Set divider to 50% once the window has been drawn
+        # Set divider to 33% once the window has been drawn
         self.after(100, lambda: paned.sashpos(0, self.winfo_width() // 3))
 
         # Key bindings
@@ -271,7 +271,6 @@ class MermaidStudio(tk.Tk):
         self.bind_all("<Control-s>", lambda e: self._save_file())
         self._rebuild_recent_menu()
 
-        # Give ThemeManager references so it can repaint
         self.theme_manager.toolbar = self.toolbar
         self.theme_manager.status_label = self.status
         self.theme_manager.editor_widget = self.editor
@@ -279,20 +278,18 @@ class MermaidStudio(tk.Tk):
         self.theme_manager.err_frame = self.err_frame
         self.theme_manager.preview_widget = self.preview
 
-        # Apply whichever theme was loaded (light or dark)
         self.theme_manager.apply_theme()
 
-        # Make sure the toggle menu item shows the alternative theme
         self._update_theme_menu_label()
 
     
     def _rebuild_recent_menu(self):
         """Refresh the Open Recent submenu."""
-        # Clear it first
+        
         self.recent_menu.delete(0, "end")
 
         if not self.recent_files:
-            # gray disabled item if no recent files
+            
             self.recent_menu.add_command(
                 label="(No recent files)",
                 state="disabled"
@@ -313,16 +310,16 @@ class MermaidStudio(tk.Tk):
             )
 
     def _on_diagram_theme_selected(self, theme_name: str):
-        # Tell ThemeManager
+        
         self.theme_manager.set_diagram_theme(theme_name)
-        # Status bar feedback (optional)
+        
         self._set_status(f"Diagram theme: {theme_name}")
 
 
     def _toggle_theme_clicked(self):
-        # flip theme
+        
         self.theme_manager.toggle_theme()
-        # update menu label every time
+        
         self._update_theme_menu_label()
 
     def _update_theme_menu_label(self):
@@ -342,13 +339,13 @@ class MermaidStudio(tk.Tk):
     def _on_sketch_toggled(self):
         enabled = bool(self.sketch_var.get())
         self.theme_manager.set_sketch_mode(enabled)
-        # tiny UX touch
+        
         self._set_status("Sketch style: on" if enabled else "Sketch style: off")
 
 
 
     def _errorlog_show(self, text: str, status_msg: str | None = None):
-        # Trim puppeteer stack noise if present (Parser3.parseError and below)
+        
         cutoff = text.find("Parser3.parseError")
         if cutoff != -1:
             text = text[:cutoff].rstrip()
@@ -366,14 +363,14 @@ class MermaidStudio(tk.Tk):
         self._set_status(status_msg)
 
     def _errorlog_hide(self):
-        # Clear and hide
+        
         self.err_text.configure(state="normal")
         self.err_text.delete("1.0", "end")
         self.err_text.configure(state="disabled")
         self.err_frame.grid_remove()
 
     def _editor_event(self, sequence: str):
-        # Safely forward to the underlying Text widget inside MermaidEditor
+        
         try:
             self.editor.text.event_generate(sequence)
         except Exception:
@@ -433,11 +430,11 @@ class MermaidStudio(tk.Tk):
             self._set_status("No changes since last render")
             return
         if self.render_lock.locked():
-            # a render is in progress, queue another once it finishes
+            
             self.pending_autorender = True
             self._set_status("Render in progress - will auto render next")
             return
-        # trigger a render now
+        
         self._render_clicked()
 
 
@@ -494,7 +491,7 @@ class MermaidStudio(tk.Tk):
             saved = self._save_file()
             if saved is None:
                 return False
-        # Either saved or chose "No"
+            
         return True
 
     def _save_file(self, force_dialog: bool = False):
@@ -525,16 +522,13 @@ class MermaidStudio(tk.Tk):
         return self._save_file()
     
     def _open_find_dialog(self):
-        # If it's already open, just raise/focus it
         if self._find_dialog and self._find_dialog.winfo_exists():
             self._find_dialog.lift()
             self._find_dialog.focus_force()
             return
 
-        # Create new dialog
         self._find_dialog = FindReplaceDialog(self, self.editor.text)
 
-        # Position it nicely relative to main window
         self._center_find_dialog(self._find_dialog)
 
         self._find_dialog.lift()
@@ -545,21 +539,17 @@ class MermaidStudio(tk.Tk):
         Place the dialog near the center-top of the main window,
         instead of dumping it at (0,0).
         """
-        # Make sure both windows have computed sizes
         self.update_idletasks()
         dialog.update_idletasks()
 
-        # Main window geometry
         main_x = self.winfo_rootx()
         main_y = self.winfo_rooty()
         main_w = self.winfo_width()
         main_h = self.winfo_height()
 
-        # Dialog size
         dlg_w = dialog.winfo_width()
         dlg_h = dialog.winfo_height()
 
-        # We'll put it horizontally centered, a little below the title bar.
         x = main_x + (main_w - dlg_w) // 2
         y = main_y + max(40, (main_h - dlg_h) // 5)  # 40px down minimum
 
@@ -608,7 +598,7 @@ class MermaidStudio(tk.Tk):
             if self.recent_files_path.exists():
                 with open(self.recent_files_path, "r", encoding="utf-8") as f:
                     arr = json.load(f)
-                # keep only files that still exist
+
                 self.recent_files = [p for p in arr if Path(p).exists()]
             else:
                 self.recent_files = []
@@ -621,12 +611,12 @@ class MermaidStudio(tk.Tk):
             with open(self.recent_files_path, "w", encoding="utf-8") as f:
                 json.dump(self.recent_files, f, indent=2)
         except Exception:
-            pass  # don't crash UI if writing fails
+            pass  
 
     def _add_recent_file(self, path: Path):
         """Add a file path to the MRU list and rebuild the menu."""
         p = str(path)
-        # move to front, dedupe
+
         self.recent_files = [f for f in self.recent_files if f != p]
         self.recent_files.insert(0, p)
         # cap at 5
@@ -644,7 +634,7 @@ class MermaidStudio(tk.Tk):
         """Open file from recent list without showing the file picker."""
         path = Path(filepath)
         if not path.exists():
-            # file missing → remove from list and warn
+
             messagebox.showwarning("File not found", f"{path} no longer exists.")
             self.recent_files = [f for f in self.recent_files if f != filepath]
             self._save_recent_files()
@@ -658,7 +648,7 @@ class MermaidStudio(tk.Tk):
             self._set_title()
             self._set_status(f"Opened {path.name}")
             self.editor.focus_editor()
-            # bump it to front again
+
             self._add_recent_file(path)
         except Exception as e:
             messagebox.showerror("Error", f"Could not open file:\n{e}")
@@ -667,7 +657,7 @@ class MermaidStudio(tk.Tk):
 
     # - Render
     def _render_clicked(self):
-        # stop any pending auto render to avoid double work
+
         self._cancel_autorender()
 
         if not self.mmdc_path:
@@ -679,22 +669,19 @@ class MermaidStudio(tk.Tk):
             code = ""
         self._code_hash_being_rendered = hash(code)
 
-        # Warn early if this diagram type is likely unsupported/experimental
+
         self._maybe_warn_diagram_type(code)
 
-        # Prepare code_to_render with optional sketch header
+
         sketch_enabled = self.theme_manager.get_sketch_mode()
         diagram_theme = self.theme_manager.get_diagram_theme()
 
-        # Do we already have some kind of config/init block at the top?
-        # We'll skip injecting if the user already has frontmatter (starts with '---')
-        # OR an init directive (%%{init: ...}%%). We don't want to double-config.
         has_frontmatter = code.lstrip().startswith("---")
         has_init_block = code.lstrip().startswith("%%{init:")
 
         if sketch_enabled and not (has_frontmatter or has_init_block):
-            # Build an init header that sets theme + handDrawn true
-            # We include the diagram theme here as well, so CLI and header agree.
+
+
             header = (
                 "---\n"
                 "config:\n"
@@ -706,7 +693,6 @@ class MermaidStudio(tk.Tk):
         else:
             code_to_render = code
 
-        # Write under $HOME/mermaid_studio_cache so the Snap can read it
         cache_dir = Path.home() / ".cache" / "mermaid_studio"
         cache_dir.mkdir(parents=True, exist_ok=True)
 
@@ -815,7 +801,7 @@ class MermaidStudio(tk.Tk):
         def worker():
             with self.render_lock:
                 self._set_status("Rendering...")
-                # Validate input exists and use absolute paths
+
                 if not input_file.exists():
                     self._set_status("Input file missing")
                     messagebox.showerror("Render failed", f"Input file not found: {input_file}")
@@ -849,7 +835,6 @@ class MermaidStudio(tk.Tk):
                         timeout=45,
                     )
 
-                    # Check for any Mermaid parse/render errors, even if exit code is 0
                     soft_error = False
                     error_markers = [
                         "Syntax error in text",
@@ -1009,7 +994,6 @@ class MermaidStudio(tk.Tk):
                     lines.append(int(m.group(1)))
                 except Exception:
                     pass
-        # Column: if present, we use the first one globally
         col = None
         mc = re.search(r"\bcolumn\s+(\d+)\b", full, re.IGNORECASE)
         if mc:
@@ -1018,11 +1002,9 @@ class MermaidStudio(tk.Tk):
             except Exception:
                 pass
 
-        # Deduplicate and sort
         uniq = sorted(set(lines))
         items = [(ln, col) for ln in uniq] if uniq else []
 
-        # Short message for status
         lines_nonempty = [ln.strip() for ln in full.splitlines() if ln.strip()]
         summary = " | ".join(lines_nonempty[:3]) if lines_nonempty else "Mermaid render error"
 
@@ -1105,7 +1087,6 @@ class MermaidStudio(tk.Tk):
 
         # Normalize some aliases so 'sequenceDiagram' becomes 'sequencediagram'
         # 'erDiagram' -> 'erdiagram', etc.
-        # The _detect_diagram_type() already lowercased, so we're OK with lower comparisons.
 
         is_known = dtype in STABLE_TYPES
         is_unstable = dtype in POTENTIALLY_UNSTABLE
