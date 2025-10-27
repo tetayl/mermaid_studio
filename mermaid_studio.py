@@ -13,6 +13,7 @@ from PIL import Image, ImageTk
 from datetime import datetime
 from code_editor import MermaidEditor
 from preview_pane import PreviewPane
+from find_dialog import FindReplaceDialog
 from example_data import list_examples, get_example
 import re
 import json
@@ -54,6 +55,7 @@ class MermaidStudio(tk.Tk):
         self.render_lock = threading.Lock()
         self.dirty = False
         self.protocol("WM_DELETE_WINDOW", self._on_exit)
+        self._find_dialog = None
 
                 
         # Recent files state
@@ -116,6 +118,15 @@ class MermaidStudio(tk.Tk):
         edit_menu.add_separator()
         edit_menu.add_command( label="Select All", accelerator="Ctrl+A", command=lambda: self._editor_select_all())
         menubar.add_cascade(label="Edit", menu=edit_menu)
+        edit_menu.add_separator()
+        edit_menu.add_command(
+            label="Find / Replace...",
+            accelerator="Ctrl+F",
+            command=self._open_find_dialog
+        )
+        # Bind the control keys in here too
+        self.bind_all("<Control-f>", lambda e: self._open_find_dialog())
+        self.bind_all("<Control-F>", lambda e: self._open_find_dialog())  # just in case
 
         # Example menu
         examples_menu = tk.Menu(menubar, tearoff=0)
@@ -512,6 +523,47 @@ class MermaidStudio(tk.Tk):
         self._add_recent_file(self.current_file)
 
         return self._save_file()
+    
+    def _open_find_dialog(self):
+        # If it's already open, just raise/focus it
+        if self._find_dialog and self._find_dialog.winfo_exists():
+            self._find_dialog.lift()
+            self._find_dialog.focus_force()
+            return
+
+        # Create new dialog
+        self._find_dialog = FindReplaceDialog(self, self.editor.text)
+
+        # Position it nicely relative to main window
+        self._center_find_dialog(self._find_dialog)
+
+        self._find_dialog.lift()
+        self._find_dialog.focus_force()
+
+    def _center_find_dialog(self, dialog):
+        """
+        Place the dialog near the center-top of the main window,
+        instead of dumping it at (0,0).
+        """
+        # Make sure both windows have computed sizes
+        self.update_idletasks()
+        dialog.update_idletasks()
+
+        # Main window geometry
+        main_x = self.winfo_rootx()
+        main_y = self.winfo_rooty()
+        main_w = self.winfo_width()
+        main_h = self.winfo_height()
+
+        # Dialog size
+        dlg_w = dialog.winfo_width()
+        dlg_h = dialog.winfo_height()
+
+        # We'll put it horizontally centered, a little below the title bar.
+        x = main_x + (main_w - dlg_w) // 2
+        y = main_y + max(40, (main_h - dlg_h) // 5)  # 40px down minimum
+
+        dialog.geometry(f"+{x}+{y}")
 
     def _on_exit(self):
         if self._maybe_prompt_save():
