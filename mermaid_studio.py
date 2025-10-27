@@ -18,6 +18,7 @@ import re
 import json
 import webbrowser
 from theme import ThemeManager
+from PIL import ImageGrab
 
 APP_VERSION = "0.2.4"
 
@@ -69,7 +70,13 @@ class MermaidStudio(tk.Tk):
 
         self._build_ui()
         self._new_document(initial_text=DEFAULT_SAMPLE)
-        self.iconphoto(False, tk.PhotoImage(file="assets/appicon.png"))
+
+        icon_path = Path(__file__).parent / "assets" / "appicon.png"
+        try:
+            self.iconphoto(False, tk.PhotoImage(file=str(icon_path)))
+        except Exception as e:
+            print("Icon load failed:", e)
+
         messagebox.showinfo(APP_TITLE, f"Mermaid Studio v{APP_VERSION}\n \nSimple Python UI wrapper for mermaid-cli.")
 
 
@@ -868,17 +875,6 @@ class MermaidStudio(tk.Tk):
 
 
         threading.Thread(target=worker, daemon=True).start()
-
-#    def _show_placeholder(self):
-#        self.canvas.delete("all")
-#        self.placeholder_text = self.canvas.create_text(
-#            "150", "50",
-#            text="No preview rendered yet",
-#            fill="#888",
-#            font=("Segoe UI", 14, "italic"),
-#            anchor="center"
-#        )
-
 
     # - Helpers
     def _show_preview(self, png_path: Path):

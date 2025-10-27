@@ -162,6 +162,8 @@ You can package Mermaid Studio into a single self-contained binary for Linux usi
 
 MIT License © 2025
 
+Mermaid Studio is an independent open-source project that uses the Mermaid.js diagramming engine. It is not affiliated with or endorsed by the Mermaid.js team.
+
 ---
 
 ## 💡 Acknowledgements
